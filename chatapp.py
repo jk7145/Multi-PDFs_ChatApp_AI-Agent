@@ -1,18 +1,22 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 import os
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import google.generativeai as genai
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains.question_answering import load_qa_chain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
-# os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+google_api_key = os.getenv("GOOGLE_API_KEY")
+if not google_api_key:
+    st.error("GOOGLE_API_KEY is not configured. Add it to the project .env file.")
+genai.configure(api_key=google_api_key)
 
 def get_pdf_text(pdf_docs):
     text=""
@@ -47,30 +51,29 @@ def get_conversational_chain():
     Answer:
     """
 
-    model = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
 
     prompt = PromptTemplate(template = prompt_template, input_variables = ["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
-
-    return chain
+    return prompt | model
 
 
 
 def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model = "models/embedding-001")
     
-    new_db = FAISS.load_local("faiss_index", embeddings)
+    new_db = FAISS.load_local(
+        "faiss_index",
+        embeddings,
+        allow_dangerous_deserialization=True,
+    )
     docs = new_db.similarity_search(user_question)
 
     chain = get_conversational_chain()
-
-    
-    response = chain(
-        {"input_documents":docs, "question": user_question}
-        , return_only_outputs=True)
+    context = "\n\n".join(doc.page_content for doc in docs)
+    response = chain.invoke({"context": context, "question": user_question})
 
     print(response)
-    st.write("Reply: ", response["output_text"])
+    st.write("Reply: ", response.content)
 
 
 
@@ -100,13 +103,13 @@ def main():
         
         st.write("---")
         st.image("img/gkj.jpg")
-        st.write("AI App created by @ Gurpreet Kaur")  # add this line to display the image
+        st.write("AI App created by @ Jay Kumar")  # add this line to display the image
 
 
     st.markdown(
         """
         <div style="position: fixed; bottom: 0; left: 0; width: 100%; background-color: #0E1117; padding: 15px; text-align: center;">
-            © <a href="https://github.com/gurpreetkaurjethra" target="_blank">Gurpreet Kaur Jethra</a> | Made with ❤️
+            © <a href="https://github.com/jk7145" target="_blank">Jay Kumar</a> | Made with ❤️
         </div>
         """,
         unsafe_allow_html=True
